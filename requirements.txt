@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+supabase
+python-dotenv
+bcrypt
+requests
+pydantic[email]
