@@ -11,7 +11,7 @@ from routes.cart_route import router as cart_router
 app = FastAPI()
 origins = [
     "http://localhost:3000",  # for local dev
-    "https://perfume-store-frontend-77rmz90ol.vercel.app"  # your Vercel frontend
+    "https://perfume-store-frontend-theta.vercel.app/"  # your Vercel frontend
 ]
 
 app.add_middleware(
