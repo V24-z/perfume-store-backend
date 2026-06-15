@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException
 from supabaseclient import supabase
 from model.cart_model import CartCreate, CartUpdate
 
-
-
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
+
+# ─── ADD TO CART ───
 @router.post("/")
 def add_to_cart(cart: CartCreate):
 
@@ -13,41 +13,51 @@ def add_to_cart(cart: CartCreate):
         supabase.table("cart_items")
         .select("*")
         .eq("user_id", cart.user_id)
-        .eq("product_id", str(cart.product_id))
+        .eq("product_id", cart.product_id)  # FIXED
         .execute()
     )
 
     if existing.data:
         item = existing.data[0]
 
-        supabase.table("cart_items").update(
-            {
+        updated = (
+            supabase.table("cart_items")
+            .update({
                 "quantity": item["quantity"] + cart.quantity
-            }
-        ).eq("id", item["id"]).execute()
+            })
+            .eq("id", item["id"])
+            .execute()
+        )
 
-        return {"message": "Cart updated"}
+        return {
+            "message": "Cart updated",
+            "data": updated.data
+        }
 
     response = (
         supabase.table("cart_items")
-        .insert(cart.model_dump(mode="json"))
+        .insert({
+            "user_id": cart.user_id,
+            "product_id": cart.product_id,
+            "quantity": cart.quantity,
+            "price":cart.price
+        })
         .execute()
     )
 
-    return response.data
+    return {
+        "message": "Added to cart",
+        "data": response.data
+    }
 
 
+# ─── GET CART ───
 @router.get("/{user_id}")
 def get_cart(user_id: int):
 
     response = (
         supabase.table("cart_items")
-        .select(
-            """
-            *,
-            products(*)
-            """
-        )
+        .select("*, products(*)")
         .eq("user_id", user_id)
         .execute()
     )
@@ -55,33 +65,46 @@ def get_cart(user_id: int):
     return response.data
 
 
+# ─── UPDATE CART ───
 @router.put("/{cart_id}")
 def update_cart(cart_id: int, data: CartUpdate):
 
     response = (
         supabase.table("cart_items")
-        .update({"quantity": data.quantity})
+        .update({
+            "quantity": data.quantity
+        })
         .eq("id", cart_id)
         .execute()
     )
 
     return response.data
 
+
+# ─── DELETE ITEM ───
 @router.delete("/{cart_id}")
 def delete_cart(cart_id: int):
-    response = supabase.table("cart_items") \
-        .delete() \
-        .eq("id", cart_id) \
+
+    response = (
+        supabase.table("cart_items")
+        .delete()
+        .eq("id", cart_id)
         .execute()
+    )
 
-    return {"message": "Deleted", "data": response.data}
+    return {
+        "message": "Deleted",
+        "data": response.data
+    }
 
+
+# ─── CLEAR CART ───
 @router.delete("/clear/{user_id}")
 def clear_cart(user_id: int):
+
     supabase.table("cart_items") \
         .delete() \
         .eq("user_id", user_id) \
         .execute()
 
     return {"message": "Cart cleared"}
-

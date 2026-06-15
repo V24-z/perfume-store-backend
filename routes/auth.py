@@ -61,6 +61,7 @@ def login(user:Loginuser):
         raise HTTPException(status_code=400, detail="Invalid password")
 
     return {"message": "Login successful",
+            "id": db_user["id"], 
             "name":db_user["name"],
             "email":db_user["email"],
             "phon":db_user["phon"],

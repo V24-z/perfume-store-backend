@@ -8,6 +8,7 @@ class CartCreate(BaseModel):
     user_id: int
     product_id: UUID
     quantity: int = 1
+    price:int
 
 
 class CartUpdate(BaseModel):
@@ -19,6 +20,7 @@ class CartResponse(BaseModel):
     user_id: int
     product_id: UUID
     quantity: int
+    price:int
     created_at: datetime
 
     class Config:
