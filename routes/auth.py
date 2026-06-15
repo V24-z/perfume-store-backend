@@ -66,3 +66,15 @@ def login(user:Loginuser):
             "phon":db_user["phon"],
             "role":db_user["role"],
             "registerd":db_user["registerd"]}
+
+@router.get("/users")
+def get_users():
+    response = supabase.table("users").select("*").execute()
+
+    if not response.data:
+        raise HTTPException(status_code=404, detail="No users found")
+
+    return {
+        "message": "Users fetched successfully",
+        "data": response.data
+    }
