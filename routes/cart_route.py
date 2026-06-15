@@ -9,11 +9,14 @@ router = APIRouter(prefix="/cart", tags=["Cart"])
 @router.post("/")
 def add_to_cart(cart: CartCreate):
 
+    if not cart.user_id or not cart.product_id:
+        raise HTTPException(status_code=400, detail="Missing fields")
+
     existing = (
         supabase.table("cart_items")
         .select("*")
         .eq("user_id", cart.user_id)
-        .eq("product_id", cart.product_id)  # FIXED
+        .eq("product_id", cart.product_id)
         .execute()
     )
 
@@ -29,28 +32,20 @@ def add_to_cart(cart: CartCreate):
             .execute()
         )
 
-        return {
-            "message": "Cart updated",
-            "data": updated.data
-        }
+        return {"message": "Cart updated", "data": updated.data}
 
     response = (
         supabase.table("cart_items")
         .insert({
             "user_id": cart.user_id,
-            "product_id": cart.product_id,
+            "product_id": str(cart.product_id),
             "quantity": cart.quantity,
-            "price":cart.price
+            "price": float(cart.price),
         })
         .execute()
     )
 
-    return {
-        "message": "Added to cart",
-        "data": response.data
-    }
-
-
+    return {"message": "Added", "data": response.data}
 # ─── GET CART ───
 @router.get("/{user_id}")
 def get_cart(user_id: int):
