@@ -66,3 +66,22 @@ def update_cart(cart_id: int, data: CartUpdate):
     )
 
     return response.data
+
+@router.delete("/{cart_id}")
+def delete_cart(cart_id: int):
+    response = supabase.table("cart_items") \
+        .delete() \
+        .eq("id", cart_id) \
+        .execute()
+
+    return {"message": "Deleted", "data": response.data}
+
+@router.delete("/clear/{user_id}")
+def clear_cart(user_id: int):
+    supabase.table("cart_items") \
+        .delete() \
+        .eq("user_id", user_id) \
+        .execute()
+
+    return {"message": "Cart cleared"}
+
