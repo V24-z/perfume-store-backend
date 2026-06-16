@@ -38,7 +38,7 @@ def add_to_cart(cart: CartCreate):
         supabase.table("cart_items")
         .insert({
             "user_id": cart.user_id,
-            "product_id": cart.product_id,
+            "product_id": str(cart.product_id),
             "quantity": cart.quantity,
         })
         .execute()
