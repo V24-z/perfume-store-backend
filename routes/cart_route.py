@@ -40,24 +40,11 @@ def add_to_cart(cart: CartCreate):
             "user_id": cart.user_id,
             "product_id": str(cart.product_id),
             "quantity": cart.quantity,
-            "price": float(cart.price),
         })
         .execute()
     )
 
     return {"message": "Added", "data": response.data}
-# ─── GET CART ───
-@router.get("/{user_id}")
-def get_cart(user_id: int):
-
-    response = (
-        supabase.table("cart_items")
-        .select("*, products(*)")
-        .eq("user_id", user_id)
-        .execute()
-    )
-
-    return response.data
 
 
 # ─── UPDATE CART ───
@@ -103,3 +90,42 @@ def clear_cart(user_id: int):
         .execute()
 
     return {"message": "Cart cleared"}
+
+
+@router.get("/all_cart")
+def get_all_carts():
+
+    response = (
+        supabase.table("cart_items")
+        .select("*, products(*), users(*)")
+        .execute()
+    )
+
+    return response.data    
+
+@router.get("/cart_by_users")
+def get_users_with_carts():
+
+    response = (
+        supabase.table("cart_items")
+        .select("user_id")
+        .execute()
+    )
+
+    users = list({item["user_id"] for item in response.data})
+
+    return users
+
+
+# ─── GET CART ───
+@router.get("/{user_id}")
+def get_cart(user_id: int):
+
+    response = (
+        supabase.table("cart_items")
+        .select("*, products(*)")
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    return response.data
