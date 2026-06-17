@@ -4,9 +4,11 @@ from model.checkout_model import CheckoutRequest
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
+
 @router.post("/checkout")
 def checkout(data: CheckoutRequest):
 
+    # ─── 1. GET CART ITEMS ───
     cart_response = (
         supabase.table("cart_items")
         .select("*")
@@ -17,28 +19,38 @@ def checkout(data: CheckoutRequest):
     cart_items = cart_response.data
 
     if not cart_items:
-        raise HTTPException(
-            status_code=400,
-            detail="Cart is empty"
-        )
+        raise HTTPException(status_code=400, detail="Cart is empty")
 
+    # ─── 2. FETCH PRODUCTS + CALCULATE TOTAL ───
     total_amount = 0
+    product_cache = {}
 
     for item in cart_items:
 
-        product = (
+        product_res = (
             supabase.table("products")
-            .select("price")
+            .select("id, price, stock_quantity")
             .eq("id", item["product_id"])
             .single()
             .execute()
         )
 
-        total_amount += (
-            float(product.data["price"])
-            * item["quantity"]
-        )
+        if not product_res.data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product not found: {item['product_id']}"
+            )
 
+        product = product_res.data
+
+        # handle null stock safely
+        stock = product["stock_quantity"] or 0
+
+        product_cache[item["product_id"]] = product
+
+        total_amount += float(product["price"]) * item["quantity"]
+
+    # ─── 3. CREATE ORDER ───
     order_response = (
         supabase.table("orders")
         .insert({
@@ -53,45 +65,42 @@ def checkout(data: CheckoutRequest):
         .execute()
     )
 
+    if not order_response.data:
+        raise HTTPException(status_code=500, detail="Failed to create order")
+
     order_id = order_response.data[0]["id"]
 
+    # ─── 4. CREATE ORDER ITEMS + UPDATE STOCK ───
     for item in cart_items:
 
-        product = (
-            supabase.table("products")
-            .select("price")
-            .eq("id", item["product_id"])
-            .single()
-            .execute()
-        )
+        product = product_cache[item["product_id"]]
 
-        (
-            supabase.table("order_items")
-            .insert({
-                "order_id": order_id,
-                "product_id": item["product_id"],
-                "quantity": item["quantity"],
-                "price": product.data["price"]
-            })
-            .execute()
-        )
-           # Reduce stock
-        new_stock = product["stock_quantity"] - item["quantity"]
+        # insert order item
+        supabase.table("order_items").insert({
+            "order_id": order_id,
+            "product_id": item["product_id"],
+            "quantity": item["quantity"],
+            "price": product["price"]
+        }).execute()
+
+        # safe stock calculation
+        current_stock = product["stock_quantity"] or 0
+        new_stock = current_stock - item["quantity"]
+
+        if new_stock < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for product {item['product_id']}"
+            )
 
         supabase.table("products").update({
             "stock_quantity": new_stock
-        }).eq(
-            "id",
-            product["id"]
-        ).execute()
+        }).eq("id", product["id"]).execute()
 
-    (
-        supabase.table("cart_items")
-        .delete()
-        .eq("user_id", data.user_id)
-        .execute()
-    )
+    # ─── 5. CLEAR CART ───
+    supabase.table("cart_items").delete().eq("user_id", data.user_id).execute()
 
+    # ─── 6. RESPONSE ───
     return {
         "message": "Order placed successfully",
         "order_id": order_id,
