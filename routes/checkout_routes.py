@@ -75,6 +75,15 @@ def checkout(data: CheckoutRequest):
             })
             .execute()
         )
+           # Reduce stock
+        new_stock = product["stock"] - item["quantity"]
+
+        supabase.table("products").update({
+            "stock": new_stock
+        }).eq(
+            "id",
+            product["id"]
+        ).execute()
 
     (
         supabase.table("cart_items")
