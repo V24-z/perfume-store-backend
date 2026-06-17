@@ -1,10 +1,6 @@
 from pydantic import BaseModel
-from typing import List
-
-class CheckoutItem(BaseModel):
-    product_id: int
-    quantity: int
 
 class CheckoutRequest(BaseModel):
-    user_id: str
-    items: List[CheckoutItem]
+    user_id: int
+    shipping_address: str
+    phone_number: str
