@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from supabaseclient import supabase
 from model.checkout_model import CheckoutRequest,UpdateOrderStatus
+import requests
 
+N8N_WEBHOOK_URL = "https://task-ocr.app.n8n.cloud/webhook/generate-invoice"
 router = APIRouter(prefix="/orders", tags=["Orders"])
-
 
 @router.post("/checkout")
 def checkout(data: CheckoutRequest):
@@ -145,19 +146,50 @@ def get_order(order_id: int):
 
 
 #===order status update ===
-@router.put("/{order_id}")
-def update_order_status(
-    order_id: int,
-    data: UpdateOrderStatus
-):
 
+@router.put("/{order_id}")
+def update_order_status(order_id: int, data: UpdateOrderStatus):
+
+    # 1. Get current order first (IMPORTANT)
+    existing = (
+        supabase.table("orders")
+        .select("*")
+        .eq("id", order_id)
+        .single()
+        .execute()
+    )
+
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    old_status = existing.data["status"]
+
+    # 2. Update order
     response = (
         supabase.table("orders")
-        .update({
-            "status": data.status
-        })
+        .update({"status": data.status})
         .eq("id", order_id)
         .execute()
     )
 
-    return response.data
+    updated_order = response.data[0]
+
+    # 3. Trigger invoice ONLY on status change: pending → confirmed
+    if old_status != "confirmed" and data.status == "confirmed":
+        try:
+            requests.post(
+                N8N_WEBHOOK_URL,
+                json={
+                    "order_id": updated_order["id"],
+                    "email": updated_order["email"],
+                    "amount": updated_order["total_amount"]
+                },
+                timeout=5
+            )
+        except Exception as e:
+            print("n8n trigger failed:", e)
+
+    return {
+        "message": "status updated",
+        "order": updated_order
+    }
