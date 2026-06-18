@@ -91,6 +91,21 @@ def clear_cart(user_id: int):
 
     return {"message": "Cart cleared"}
 
+
+
+@router.get("/all_cart")
+def get_all_carts():
+
+    response = (
+        supabase.table("cart_items")
+        .select("*, products(*), users(*)")
+        .execute()
+    )
+
+    return response.data    
+
+
+
 # ─── GET CART ───
 @router.get("/{user_id}")
 def get_cart(user_id: int):
@@ -104,16 +119,7 @@ def get_cart(user_id: int):
 
     return response.data
 
-@router.get("/all_cart")
-def get_all_carts():
 
-    response = (
-        supabase.table("cart_items")
-        .select("*, products(*), users(*)")
-        .execute()
-    )
-
-    return response.data    
 
 @router.get("/cart_by_users")
 def get_users_with_carts():
