@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from supabaseclient import supabase
-from model.checkout_model import CheckoutRequest
+from model.checkout_model import CheckoutRequest,UpdateOrderStatus
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -106,3 +106,58 @@ def checkout(data: CheckoutRequest):
         "order_id": order_id,
         "total_amount": total_amount
     }
+
+#===get all order===
+@router.get("/all")
+def get_all_orders():
+
+    response = (
+        supabase.table("orders")
+        .select("*, users(*)")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return response.data
+
+#===order by order id====
+@router.get("/{order_id}")
+def get_order(order_id: int):
+
+    order = (
+        supabase.table("orders")
+        .select(
+            """
+            *,
+            users(*),
+            order_items(
+                *,
+                products(*)
+            )
+            """
+        )
+        .eq("id", order_id)
+        .single()
+        .execute()
+    )
+
+    return order.data
+
+
+#===order status update ===
+@router.put("/{order_id}")
+def update_order_status(
+    order_id: int,
+    data: UpdateOrderStatus
+):
+
+    response = (
+        supabase.table("orders")
+        .update({
+            "status": data.status
+        })
+        .eq("id", order_id)
+        .execute()
+    )
+
+    return response.data
