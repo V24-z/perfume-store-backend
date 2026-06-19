@@ -31,7 +31,7 @@ def checkout(data: CheckoutRequest):
 
         product_res = (
             supabase.table("products")
-            .select("id, name, price, stock_quantity")  # ✅ name included
+            .select("id, name, price, stock_quantity")
             .eq("id", item["product_id"])
             .single()
             .execute()
@@ -126,7 +126,6 @@ def debug_order(order_id: int):
         .single()
         .execute()
     )
-    print("RAW ORDER:", order_raw.data)
 
     if not order_raw.data:
         return {"error": "Order not found"}
@@ -140,7 +139,6 @@ def debug_order(order_id: int):
         .single()
         .execute()
     )
-    print("RAW USER:", user_raw.data)
 
     items_raw = (
         supabase.table("order_items")
@@ -148,26 +146,11 @@ def debug_order(order_id: int):
         .eq("order_id", order_id)
         .execute()
     )
-    print("RAW ITEMS:", items_raw.data)
-
-    join_query = (
-        supabase.table("orders")
-        .select("""
-            *,
-            users(id, name, email),
-            order_items(quantity, price, products(id, name))
-        """)
-        .eq("id", order_id)
-        .single()
-        .execute()
-    )
-    print("JOIN RESULT:", join_query.data)
 
     return {
         "raw_order": order_raw.data,
         "raw_user": user_raw.data,
-        "raw_items": items_raw.data,
-        "join_result": join_query.data
+        "raw_items": items_raw.data
     }
 
 
@@ -195,7 +178,7 @@ def get_order(order_id: int):
 @router.put("/{order_id}")
 def update_order_status(order_id: int, data: UpdateOrderStatus):
 
-    # 1. Get current order
+    # 1. Get current order (already has phone_number + shipping_address)
     existing = (
         supabase.table("orders")
         .select("*")
@@ -225,7 +208,7 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
             order_data = existing.data
             user_id = order_data.get("user_id")
 
-            # ✅ Fetch user SEPARATELY (safer than join)
+            # Fetch user separately
             user_res = (
                 supabase.table("users")
                 .select("id, name, email")
@@ -239,7 +222,7 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
             if not user:
                 raise Exception(f"User not found for user_id: {user_id}")
 
-            # ✅ Fetch order items SEPARATELY with product names
+            # Fetch order items with product names
             items_res = (
                 supabase.table("order_items")
                 .select("quantity, price, products(id, name)")
@@ -259,16 +242,19 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
             ]
 
             payload = {
-                "order_id":       str(order_id),
-                "customer_name":  user.get("name", ""),
-                "email":          user.get("email", ""),
-                "order_date":     order_data.get("created_at", "")[:10],
-                "payment_method": order_data.get("payment_method", "COD").upper(),
-                "items":          items_payload,
-                "subtotal":       float(order_data.get("total_amount", 0)),
-                "tax":            0,
-                "discount":       0,
-                "total_amount":   float(order_data.get("total_amount", 0))
+                "order_id":         str(order_id),
+                "customer_name":    user.get("name", ""),
+                "email":            user.get("email", ""),
+                "phone_number":     order_data.get("phone_number", ""),      # ✅ from orders table
+                "shipping_address": order_data.get("shipping_address", ""),  # ✅ from orders table
+                "order_date":       order_data.get("created_at", "")[:10],
+                "payment_method":   order_data.get("payment_method", "COD").upper(),
+                "payment_status":   order_data.get("payment_status", ""),
+                "items":            items_payload,
+                "subtotal":         float(order_data.get("total_amount", 0)),
+                "tax":              0,
+                "discount":         0,
+                "total_amount":     float(order_data.get("total_amount", 0))
             }
 
             print("✅ Sending to n8n:", payload)
@@ -282,7 +268,7 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
             print("n8n response:", n8n_response.text[:300])
 
         except Exception as e:
-            print("n8n trigger failed:", e)
+            print("❌ n8n trigger failed:", e)
 
     return {
         "message": "status updated",
