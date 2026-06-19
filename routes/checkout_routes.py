@@ -282,7 +282,7 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
             print("n8n response:", n8n_response.text[:300])
 
         except Exception as e:
-            print("❌ n8n trigger failed:", e)
+            print("n8n trigger failed:", e)
 
     return {
         "message": "status updated",
