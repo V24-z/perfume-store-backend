@@ -175,20 +175,49 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
     updated_order = response.data[0]
 
     # 3. Trigger invoice ONLY on status change: pending → confirmed
+  # 3. Trigger invoice ONLY on status change: pending → confirmed
     if old_status != "confirmed" and data.status == "confirmed":
-        try:
-            requests.post(
-                N8N_WEBHOOK_URL,
-                json={
-                    "order_id": updated_order["id"],
-                    "email": updated_order["email"],
-                    "amount": updated_order["total_amount"]
-                },
-                timeout=5
-            )
-        except Exception as e:
-            print("n8n trigger failed:", e)
+            try:
+                # Fetch full order with user + items
+                full_order = (
+                    supabase.table("orders")
+                    .select("""
+                        *,
+                        users(name, email),
+                        order_items(quantity, price, products(name))
+                    """)
+                    .eq("id", order_id)
+                    .single()
+                    .execute()
+                )
+                od = full_order.data
 
+                items_payload = [
+                    {
+                        "name": oi["products"]["name"],
+                        "quantity": oi["quantity"],
+                        "price": float(oi["price"])
+                    }
+                    for oi in od.get("order_items", [])
+                ]
+
+                requests.post(
+                    N8N_WEBHOOK_URL,
+                    json={
+                        "order_id":       str(od["id"]),
+                        "customer_name":  od["users"]["name"],
+                        "email":          od["users"]["email"],
+                        "order_date":     od["created_at"][:10],   # YYYY-MM-DD
+                        "payment_method": od.get("payment_method", "COD"),
+                        "items":          items_payload,
+                        "tax":            0,
+                        "discount":       0
+                        # subtotal & total_amount computed by n8n automatically
+                    },
+                    timeout=10
+                )
+            except Exception as e:
+                print("n8n trigger failed:", e)
     return {
         "message": "status updated",
         "order": updated_order
