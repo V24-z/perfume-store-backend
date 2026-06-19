@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from supabaseclient import supabase
-from model.checkout_model import CheckoutRequest,UpdateOrderStatus
+from model.checkout_model import CheckoutRequest, UpdateOrderStatus
 import requests
 
 N8N_WEBHOOK_URL = "https://task-ocr.app.n8n.cloud/webhook/generate-invoice"
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
 
 @router.post("/checkout")
 def checkout(data: CheckoutRequest):
@@ -30,7 +31,7 @@ def checkout(data: CheckoutRequest):
 
         product_res = (
             supabase.table("products")
-            .select("id, price, stock_quantity")
+            .select("id, name, price, stock_quantity")  # ✅ name included
             .eq("id", item["product_id"])
             .single()
             .execute()
@@ -43,12 +44,7 @@ def checkout(data: CheckoutRequest):
             )
 
         product = product_res.data
-
-        # handle null stock safely
-        stock = product["stock_quantity"] or 0
-
         product_cache[item["product_id"]] = product
-
         total_amount += float(product["price"]) * item["quantity"]
 
     # ─── 3. CREATE ORDER ───
@@ -76,7 +72,6 @@ def checkout(data: CheckoutRequest):
 
         product = product_cache[item["product_id"]]
 
-        # insert order item
         supabase.table("order_items").insert({
             "order_id": order_id,
             "product_id": item["product_id"],
@@ -84,7 +79,6 @@ def checkout(data: CheckoutRequest):
             "price": product["price"]
         }).execute()
 
-        # safe stock calculation
         current_stock = product["stock_quantity"] or 0
         new_stock = current_stock - item["quantity"]
 
@@ -108,49 +102,100 @@ def checkout(data: CheckoutRequest):
         "total_amount": total_amount
     }
 
-#===get all order===
+
+# === get all orders ===
 @router.get("/all")
 def get_all_orders():
-
     response = (
         supabase.table("orders")
         .select("*, users(*)")
         .order("created_at", desc=True)
         .execute()
     )
-
     return response.data
 
-#===order by order id====
+
+# === DEBUG: call this to diagnose empty customer details ===
+@router.get("/debug/{order_id}")
+def debug_order(order_id: int):
+
+    order_raw = (
+        supabase.table("orders")
+        .select("*")
+        .eq("id", order_id)
+        .single()
+        .execute()
+    )
+    print("RAW ORDER:", order_raw.data)
+
+    if not order_raw.data:
+        return {"error": "Order not found"}
+
+    user_id = order_raw.data.get("user_id")
+
+    user_raw = (
+        supabase.table("users")
+        .select("*")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    print("RAW USER:", user_raw.data)
+
+    items_raw = (
+        supabase.table("order_items")
+        .select("*, products(id, name, price)")
+        .eq("order_id", order_id)
+        .execute()
+    )
+    print("RAW ITEMS:", items_raw.data)
+
+    join_query = (
+        supabase.table("orders")
+        .select("""
+            *,
+            users(id, name, email),
+            order_items(quantity, price, products(id, name))
+        """)
+        .eq("id", order_id)
+        .single()
+        .execute()
+    )
+    print("JOIN RESULT:", join_query.data)
+
+    return {
+        "raw_order": order_raw.data,
+        "raw_user": user_raw.data,
+        "raw_items": items_raw.data,
+        "join_result": join_query.data
+    }
+
+
+# === order by order id ===
 @router.get("/{order_id}")
 def get_order(order_id: int):
-
     order = (
         supabase.table("orders")
-        .select(
-            """
+        .select("""
             *,
             users(*),
             order_items(
                 *,
                 products(*)
             )
-            """
-        )
+        """)
         .eq("id", order_id)
         .single()
         .execute()
     )
-
     return order.data
 
 
-#===order status update ===
-
+# === order status update ===
 @router.put("/{order_id}")
 def update_order_status(order_id: int, data: UpdateOrderStatus):
 
-    # 1. Get current order first (IMPORTANT)
+    # 1. Get current order
     existing = (
         supabase.table("orders")
         .select("*")
@@ -164,7 +209,7 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
 
     old_status = existing.data["status"]
 
-    # 2. Update order
+    # 2. Update status
     response = (
         supabase.table("orders")
         .update({"status": data.status})
@@ -174,50 +219,71 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
 
     updated_order = response.data[0]
 
-    # 3. Trigger invoice ONLY on status change: pending → confirmed
-  # 3. Trigger invoice ONLY on status change: pending → confirmed
+    # 3. Trigger invoice ONLY on: pending → confirmed
     if old_status != "confirmed" and data.status == "confirmed":
-            try:
-                # Fetch full order with user + items
-                full_order = (
-                    supabase.table("orders")
-                    .select("""
-                        *,
-                        users(name, email),
-                        order_items(quantity, price, products(name))
-                    """)
-                    .eq("id", order_id)
-                    .single()
-                    .execute()
-                )
-                od = full_order.data
+        try:
+            order_data = existing.data
+            user_id = order_data.get("user_id")
 
-                items_payload = [
-                    {
-                        "name": oi["products"]["name"],
-                        "quantity": oi["quantity"],
-                        "price": float(oi["price"])
-                    }
-                    for oi in od.get("order_items", [])
-                ]
+            # ✅ Fetch user SEPARATELY (safer than join)
+            user_res = (
+                supabase.table("users")
+                .select("id, name, email")
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+            user = user_res.data
+            print("USER DATA:", user)
 
-                requests.post(
-                    N8N_WEBHOOK_URL,
-                    json={
-                        "order_id":       str(od["id"]),
-                        "customer_name":  od["users"]["name"],
-                        "email":          od["users"]["email"],
-                        "order_date":     od["created_at"][:10],   # YYYY-MM-DD
-                        "payment_method": od.get("payment_method", "COD"),
-                        "items":          items_payload,
-                        "tax":            0,
-                        "discount":       0
-                        # subtotal & total_amount computed by n8n automatically
-                    },
-                    timeout=10
-                )
-            except Exception as e:
-                print("n8n trigger failed:", e)
+            if not user:
+                raise Exception(f"User not found for user_id: {user_id}")
+
+            # ✅ Fetch order items SEPARATELY with product names
+            items_res = (
+                supabase.table("order_items")
+                .select("quantity, price, products(id, name)")
+                .eq("order_id", order_id)
+                .execute()
+            )
+            order_items = items_res.data
+            print("ORDER ITEMS:", order_items)
+
+            items_payload = [
+                {
+                    "name": oi["products"]["name"] if oi.get("products") else "Unknown Item",
+                    "quantity": oi["quantity"],
+                    "price": float(oi["price"])
+                }
+                for oi in (order_items or [])
+            ]
+
+            payload = {
+                "order_id":       str(order_id),
+                "customer_name":  user.get("name", ""),
+                "email":          user.get("email", ""),
+                "order_date":     order_data.get("created_at", "")[:10],
+                "payment_method": order_data.get("payment_method", "COD").upper(),
+                "items":          items_payload,
+                "subtotal":       float(order_data.get("total_amount", 0)),
+                "tax":            0,
+                "discount":       0,
+                "total_amount":   float(order_data.get("total_amount", 0))
+            }
+
+            print("✅ Sending to n8n:", payload)
+
+            n8n_response = requests.post(
+                N8N_WEBHOOK_URL,
+                json=payload,
+                timeout=10
+            )
+            print("n8n status:", n8n_response.status_code)
+            print("n8n response:", n8n_response.text[:300])
+
+        except Exception as e:
+            print("❌ n8n trigger failed:", e)
+
     return {
         "message": "status updated",
         "order": updated_order
