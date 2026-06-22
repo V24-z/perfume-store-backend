@@ -8,7 +8,7 @@ router=APIRouter()
 def trigger_welcome_email(name: str, email: str):
     print("Triggering n8n webhook for:", name, email)
     response=requests.post(
-        "https://n8n-task.app.n8n.cloud/webhook/user-registration",
+        "https://task-ocr.app.n8n.cloud/webhook/user-registration",
         json={"name": name, "email": email},
         timeout=5
     )
