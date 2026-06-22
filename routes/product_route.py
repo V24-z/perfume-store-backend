@@ -43,111 +43,18 @@ def create_product(product: ProductCreate):
         "message": "Product created successfully",
         "data": result.data
     }
-#ALL PRODUCTS + PAGINATION
-@router.get("/")
-def get_products(
-    page: int = 1,
-    limit: int = 12
-    ):
 
-    start = (page - 1) * limit
-    end = start + limit - 1
+@router.get("/")
+def get_products():
 
     result = (
         supabase
         .table("products")
         .select("*,category:categories(name)")
-        .range(start, end)
         .execute()
     )
 
     return result.data
-
-#FILTER API
-
-@router.get("/filter")
-def filter_products(
-    page: int = 1,
-    limit: int = 12,
-    category_id: str | None = None,
-    brand: str | None = None,
-    min_price: float = 0,
-    max_price: float = 100000,
-    search: str | None = None,
-    featured: bool | None = None
-    ):
-
-    start = (page - 1) * limit
-    end = start + limit - 1
-
-    query = (
-        supabase
-        .table("products")
-        .select("*")
-        .gte("price", min_price)
-        .lte("price", max_price)
-    )
-
-    if category_id:
-        query = query.eq(
-            "category_id",
-            category_id
-        )
-
-    if brand:
-        query = query.eq(
-            "brand",
-            brand
-        )
-
-    if featured is not None:
-        query = query.eq(
-            "is_featured",
-            featured
-        )
-
-    if search:
-        query = query.or_(
-            f"name.ilike.%{search}%,"
-            f"brand.ilike.%{search}%,"
-            f"description.ilike.%{search}%,"
-            f"fragrance_type.ilike.%{search}%"
-        )
-
-    result = (
-        query
-        .range(start, end)
-        .execute()
-    )
-
-    return result.data
-
-
-
-
-#BRANDS LIST
-
-@router.get("/brands")
-def get_brands():
-
-    result = (
-        supabase
-        .table("products")
-        .select("brand")
-        .execute()
-    )
-
-    brands = list(
-        set(
-            item["brand"]
-            for item in result.data
-            if item["brand"]
-        )
-    )
-
-    brands.sort()
-
-    return brands    
 @router.get("/new-arrivals")
 def get_new_arrivals():
     response = (
@@ -160,8 +67,6 @@ def get_new_arrivals():
     )
     
     return response.data
-
-
 
 @router.put("/{product_id}")
 def update_product(
@@ -268,3 +173,4 @@ def toggle_featured(
     return {
         "message": "Featured status updated"
     }
+
