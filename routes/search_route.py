@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from supabaseclient import supabase
 
 router = APIRouter(
@@ -9,17 +9,36 @@ router = APIRouter(
 @router.get("/search")
 def search_products(q: str):
 
-    response = (
+    q = q.strip()
+
+    # First search exact brand matches
+    brand_response = (
         supabase.table("products")
         .select("*")
-        .or_(
-            f"name.ilike.%{q}%,"
-            f"brand.ilike.%{q}%,"
-            f"fragrance_type.ilike.%{q}%,"
-            f"description.ilike.%{q}%"
-        )
+        .ilike("brand", f"%{q}%")
         .limit(10)
         .execute()
     )
 
-    return response.data
+    # Then search product name matches
+    product_response = (
+        supabase.table("products")
+        .select("*")
+        .ilike("name", f"%{q}%")
+        .limit(10)
+        .execute()
+    )
+
+    brand_results = brand_response.data or []
+    product_results = product_response.data or []
+
+    # Remove duplicates
+    seen = set()
+    results = []
+
+    for item in brand_results + product_results:
+        if item["id"] not in seen:
+            seen.add(item["id"])
+            results.append(item)
+
+    return results
