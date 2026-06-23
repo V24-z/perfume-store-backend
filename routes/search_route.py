@@ -14,7 +14,7 @@ def search_products(q: str):
     # First search exact brand matches
     brand_response = (
         supabase.table("products")
-        .select("*")
+        .select("id,name,brand")
         .ilike("brand", f"%{q}%")
         .limit(10)
         .execute()
