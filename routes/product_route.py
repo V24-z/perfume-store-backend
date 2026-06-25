@@ -7,6 +7,10 @@ router = APIRouter(
     tags=["Products"]
 )
 
+
+# =========================
+# Create Product
+# =========================
 @router.post("/")
 def create_product(product: ProductCreate):
 
@@ -29,7 +33,7 @@ def create_product(product: ProductCreate):
 
     product_data["category_id"] = category.data["id"]
 
-    # remove category_name because products table doesn't have this column
+    # Remove field not present in products table
     product_data.pop("category_name")
 
     result = (
@@ -44,30 +48,177 @@ def create_product(product: ProductCreate):
         "data": result.data
     }
 
+
+# =========================
+# Get Products + Filters
+# =========================
 @router.get("/")
-def get_products():
+def get_products(
+    search: str = None,
+    category_id: str = None,
+    brand: str = None,
+    max_price: float = None,
+    sort: str = None,
+    is_featured: bool = None,
+    page: int = 1,
+    limit: int = 12,
+):
+
+    start = (page - 1) * limit
+    end = start + limit - 1
+
+    query = (
+        supabase
+        .table("products")
+        .select("*, category:categories(name)")
+        .eq("is_active", True)
+    )
+
+    # Search Product Name
+    if search:
+        query = query.ilike(
+            "name",
+            f"%{search}%"
+        )
+
+    # Category Filter
+    if category_id:
+        query = query.eq(
+            "category_id",
+            category_id
+        )
+
+    # Brand Filter
+    if brand:
+        query = query.ilike(
+            "brand",
+            f"%{brand}%"
+        )
+
+    # Price Filter
+    if max_price:
+        query = query.lte(
+            "price",
+            max_price
+        )
+
+    # Featured Filter
+    if is_featured is not None:
+        query = query.eq(
+            "is_featured",
+            is_featured
+        )
+
+    # Sorting
+    if sort == "low":
+        query = query.order(
+            "price",
+            desc=False
+        )
+
+    elif sort == "high":
+        query = query.order(
+            "price",
+            desc=True
+        )
+
+    # Pagination
+    query = query.range(
+        start,
+        end
+    )
+    print("CATEGORY_ID:", category_id)
+    print("SORT:", sort)
+
+    result = query.execute()
+    print("TOTAL PRODUCTS:", len(result.data))
+    print(result.data)
+    return result.data
+    
+
+
+# =========================
+# New Arrivals
+# =========================
+@router.get("/new-arrivals")
+def get_new_arrivals():
 
     result = (
         supabase
         .table("products")
-        .select("*,category:categories(name)")
-        .execute()
-    )
-
-    return result.data
-@router.get("/new-arrivals")
-def get_new_arrivals():
-    response = (
-        supabase.table("products")
         .select("*")
         .eq("is_active", True)
         .order("created_at", desc=True)
         .limit(4)
         .execute()
     )
-    
-    return response.data
 
+    return result.data
+
+
+# =========================
+# Featured Products
+# =========================
+@router.get("/featured/list")
+def featured_products():
+
+    result = (
+        supabase
+        .table("products")
+        .select("*")
+        .eq("is_active", True)
+        .eq("is_featured", True)
+        .execute()
+    )
+
+    return result.data
+
+
+# =========================
+# Get Single Product
+# =========================
+@router.get("/by-id/{product_id}")
+def get_product(product_id: str):
+
+    result = (
+        supabase
+        .table("products")
+        .select("*, category:categories(name)")
+        .eq("id", product_id)
+        .single()
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    return result.data
+
+
+# =========================
+# Products By Category
+# =========================
+@router.get("/category/{category_id}")
+def products_by_category(category_id: str):
+
+    result = (
+        supabase
+        .table("products")
+        .select("*")
+        .eq("category_id", category_id)
+        .eq("is_active", True)
+        .execute()
+    )
+
+    return result.data
+
+
+# =========================
+# Update Product
+# =========================
 @router.put("/{product_id}")
 def update_product(
     product_id: str,
@@ -75,9 +226,9 @@ def update_product(
 ):
 
     update_data = {
-        k: v
-        for k, v in product.dict().items()
-        if v is not None
+        key: value
+        for key, value in product.model_dump().items()
+        if value is not None
     }
 
     result = (
@@ -93,10 +244,14 @@ def update_product(
         "data": result.data
     }
 
+
+# =========================
+# Delete Product
+# =========================
 @router.delete("/{product_id}")
 def delete_product(product_id: str):
 
-    result = (
+    (
         supabase
         .table("products")
         .delete()
@@ -108,59 +263,17 @@ def delete_product(product_id: str):
         "message": "Product deleted successfully"
     }
 
-@router.get("/featured/list")
-def featured_products():
 
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("is_featured", True)
-        .execute()
-    )
-
-    return result.data
-
-@router.get("/by-id/{product_id}")
-
-def get_product(product_id: str):
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("id", product_id)
-        .execute()
-    )
-
-    if not result.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Product not found"
-        )
-
-    return result.data[0]
-
-@router.get("/category/{category_id}")
-def products_by_category(category_id: str):
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("category_id", category_id)
-        .execute()
-    )
-
-    return result.data
-
+# =========================
+# Toggle Featured
+# =========================
 @router.put("/{product_id}/featured")
 def toggle_featured(
     product_id: str,
     is_featured: bool
 ):
 
-    result = (
+    (
         supabase
         .table("products")
         .update({
@@ -173,4 +286,3 @@ def toggle_featured(
     return {
         "message": "Featured status updated"
     }
-
