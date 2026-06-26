@@ -78,7 +78,7 @@ def get_products(
     if search:
         query = query.ilike(
             "name",
-            f"%{search}%"
+            f"{search}%"
         )
 
     # Category Filter
@@ -201,7 +201,7 @@ def get_product(product_id: str):
 # =========================
 # Products By Category
 # =========================
-@router.get("/category/{category_id}")
+"""@router.get("/category/{category_id}")
 def products_by_category(category_id: str):
 
     result = (
@@ -213,7 +213,7 @@ def products_by_category(category_id: str):
         .execute()
     )
 
-    return result.data
+    return result.data"""
 
 
 # =========================
@@ -267,7 +267,7 @@ def delete_product(product_id: str):
 # =========================
 # Toggle Featured
 # =========================
-@router.put("/{product_id}/featured")
+"""@router.put("/{product_id}/featured")
 def toggle_featured(
     product_id: str,
     is_featured: bool
@@ -285,4 +285,4 @@ def toggle_featured(
 
     return {
         "message": "Featured status updated"
-    }
+    }"""

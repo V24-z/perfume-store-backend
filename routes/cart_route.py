@@ -121,17 +121,4 @@ def get_cart(user_id: int):
 
 
 
-@router.get("/cart_by_users")
-def get_users_with_carts():
-
-    response = (
-        supabase.table("cart_items")
-        .select("user_id")
-        .execute()
-    )
-
-    users = list({item["user_id"] for item in response.data})
-
-    return users
-
 

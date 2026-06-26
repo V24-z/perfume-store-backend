@@ -23,8 +23,7 @@ def create_banner(banner: BannerCreate):
 def banner():
     res=supabase.table("banners").select("*").execute()
     return res.data
-@router.get("/{banner_id}")
-def get_banner(banner_id: str):
+
 
     result = (
         supabase.table("banners")
