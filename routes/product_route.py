@@ -14,12 +14,13 @@ router = APIRouter(
 @router.post("/")
 def create_product(product: ProductCreate):
     print("Category from frontend:", product.category_name)
+    category_name = product.category_name.strip()
     try:
         category = (
             supabase
             .table("categories")
             .select("id")
-            .eq("name", product.category_name)
+            .eq("name", category_name)
             .single()
             .execute()
         )
