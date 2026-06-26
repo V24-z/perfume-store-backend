@@ -13,32 +13,8 @@ router = APIRouter(
 # =========================
 @router.post("/")
 def create_product(product: ProductCreate):
-    print("Category from frontend:", product.category_name)
-    category_name = product.category_name.strip()
-    try:
-        category = (
-            supabase
-            .table("categories")
-            .select("id")
-            .eq("name", category_name)
-            .single()
-            .execute()
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="Category not found"
-        )
-
-    
 
     product_data = product.model_dump()
-    
-    product_data["category_id"] = category.data["id"]
-    print(product_data)
-    product_data.pop("created_at", None)
-    # Remove field not present in products table
-    product_data.pop("category_name")
 
     result = (
         supabase
@@ -51,7 +27,6 @@ def create_product(product: ProductCreate):
         "message": "Product created successfully",
         "data": result.data
     }
-
 
 # =========================
 # Get Products + Filters

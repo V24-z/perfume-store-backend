@@ -12,7 +12,7 @@ class ProductCreate(BaseModel):
 
     stock_quantity: int
 
-    category_name: str
+    category_id: str
 
     image_url: str
 
@@ -21,12 +21,8 @@ class ProductCreate(BaseModel):
 
     volume_ml: Optional[int] = None
 
-    
-
     is_featured: bool = False
-    is_active:bool=True
-    #created_at: Optional[datetime] = None
-    
+    is_active: bool = True
 
 
 class ProductUpdate(BaseModel):
