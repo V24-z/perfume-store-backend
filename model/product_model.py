@@ -25,7 +25,7 @@ class ProductCreate(BaseModel):
 
     is_featured: bool = False
     is_active:bool=True
-    created_at: Optional[datetime] = None
+    #created_at: Optional[datetime] = None
     
 
 
