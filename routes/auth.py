@@ -68,14 +68,27 @@ def login(user:Loginuser):
             "role":db_user["role"],
             "registerd":db_user["registerd"]}
 
+
+def mask_email(email):
+    if not email or "@" not in email:
+        return email
+
+    name, domain = email.split("@")
+    return name[:2] + "***@" + domain
+
 @router.get("/users")
 def get_users():
+
     response = supabase.table("users").select("*").execute()
 
-    if not response.data:
-        raise HTTPException(status_code=404, detail="No users found")
+    users = response.data
+
+    for user in users:
+        if user.get("email"):
+            user["email"] = mask_email(user["email"])
 
     return {
         "message": "Users fetched successfully",
-        "data": response.data
+        "data": users
     }
+
