@@ -68,7 +68,7 @@ def login(user:Loginuser):
         "email": db_user["email"],
         "role": db_user["role"]
     })
-
+    print("NEW LOGIN ENDPOINT EXECUTED")
     return {
     "message": "Login successful",
     "access_token": token,
