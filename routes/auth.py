@@ -1,6 +1,9 @@
 from model.model import User,Loginuser
-from fastapi import APIRouter,HTTPException,BackgroundTasks
+from fastapi import APIRouter,HTTPException,BackgroundTasks, Depends
 from supabaseclient import supabase
+from auth import create_access_token
+from dependencies import get_current_user
+
 import bcrypt
 import requests
 
@@ -60,13 +63,23 @@ def login(user:Loginuser):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid password")
 
-    return {"message": "Login successful",
-            "id": db_user["id"], 
-            "name":db_user["name"],
-            "email":db_user["email"],
-            "phon":db_user["phon"],
-            "role":db_user["role"],
-            "registerd":db_user["registerd"]}
+    token = create_access_token({
+        "id": db_user["id"],
+        "email": db_user["email"],
+        "role": db_user["role"]
+    })
+
+    return {
+    "message": "Login successful",
+    "access_token": token,
+    "token_type": "bearer",
+    "user": {
+        "id": db_user["id"],
+        "name": db_user["name"],
+        "email": db_user["email"],
+        "role": db_user["role"]
+    }
+}
 
 
 def mask_email(email):
@@ -77,7 +90,13 @@ def mask_email(email):
     return name[:2] + "***@" + domain
 
 @router.get("/users")
-def get_users():
+def get_users(current_user=Depends(get_current_user)):
+
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
 
     response = supabase.table("users").select("*").execute()
 
@@ -92,3 +111,4 @@ def get_users():
         "data": users
     }
 
+    
