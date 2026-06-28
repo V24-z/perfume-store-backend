@@ -170,5 +170,17 @@ def create_admin(admin_data: AdminCreate, current_user=Depends(admin_required)):
     }
 
 
+@router.get("/admins")
+def get_admins(current_user=Depends(admin_required)):
+    response = (
+        supabase.table("users")
+        .select("id,name,email,phon,registerd,role")
+        .eq("role", "admin")
+        .execute()
+    )
 
+    return {
+        "message": "Admins fetched successfully",
+        "data": response.data
+    }
     
