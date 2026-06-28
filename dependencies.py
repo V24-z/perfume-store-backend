@@ -2,15 +2,12 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer
 from jose import jwt, JWTError
 from supabaseclient import supabase
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
+security = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
-
-security = HTTPBearer()
 
 
 def get_current_user(credentials=Depends(security)):
@@ -23,6 +20,8 @@ def get_current_user(credentials=Depends(security)):
             algorithms=[ALGORITHM]
         )
 
+        print("Payload:", payload)
+
         response = (
             supabase.table("users")
             .select("*")
@@ -30,6 +29,8 @@ def get_current_user(credentials=Depends(security)):
             .single()
             .execute()
         )
+
+        print("DB Response:", response.data)
 
         if not response.data:
             raise HTTPException(
@@ -39,18 +40,9 @@ def get_current_user(credentials=Depends(security)):
 
         return response.data
 
-    except JWTError:
+    except JWTError as e:
+        print(e)
         raise HTTPException(
             status_code=401,
             detail="Invalid token"
         )
-
-
-def admin_required(current_user=Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access required"
-        )
-
-    return current_user
