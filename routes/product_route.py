@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from supabaseclient import supabase
 from model.product_model import ProductCreate, ProductUpdate
+# Import the security gatekeeper from your dependencies file
+from dependencies import require_admin
 
 router = APIRouter(
     prefix="/products",
@@ -9,10 +11,10 @@ router = APIRouter(
 
 
 # =========================
-# Create Product
+# Create Product (SECURED)
 # =========================
 @router.post("/")
-def create_product(product: ProductCreate):
+def create_product(product: ProductCreate, admin_user: dict = Depends(require_admin)):
 
     product_data = product.model_dump()
 
@@ -29,7 +31,7 @@ def create_product(product: ProductCreate):
     }
 
 # =========================
-# Get Products + Filters
+# Get Products + Filters (PUBLIC)
 # =========================
 @router.get("/")
 def get_products(
@@ -117,7 +119,7 @@ def get_products(
 
 
 # =========================
-# New Arrivals
+# New Arrivals (PUBLIC)
 # =========================
 @router.get("/new-arrivals")
 def get_new_arrivals():
@@ -136,7 +138,7 @@ def get_new_arrivals():
 
 
 # =========================
-# Featured Products
+# Featured Products (PUBLIC)
 # =========================
 @router.get("/featured/list")
 def featured_products():
@@ -154,7 +156,7 @@ def featured_products():
 
 
 # =========================
-# Get Single Product
+# Get Single Product (PUBLIC)
 # =========================
 @router.get("/by-id/{product_id}")
 def get_product(product_id: str):
@@ -178,30 +180,13 @@ def get_product(product_id: str):
 
 
 # =========================
-# Products By Category
-# =========================
-"""@router.get("/category/{category_id}")
-def products_by_category(category_id: str):
-
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .eq("category_id", category_id)
-        .eq("is_active", True)
-        .execute()
-    )
-
-    return result.data"""
-
-
-# =========================
-# Update Product
+# Update Product (SECURED)
 # =========================
 @router.put("/{product_id}")
 def update_product(
     product_id: str,
-    product: ProductUpdate
+    product: ProductUpdate,
+    admin_user: dict = Depends(require_admin)
 ):
 
     update_data = {
@@ -225,10 +210,10 @@ def update_product(
 
 
 # =========================
-# Delete Product
+# Delete Product (SECURED)
 # =========================
 @router.delete("/{product_id}")
-def delete_product(product_id: str):
+def delete_product(product_id: str, admin_user: dict = Depends(require_admin)):
 
     (
         supabase
@@ -241,7 +226,6 @@ def delete_product(product_id: str):
     return {
         "message": "Product deleted successfully"
     }
-
 
 # =========================
 # Toggle Featured

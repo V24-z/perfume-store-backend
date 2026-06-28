@@ -1,18 +1,23 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from supabaseclient import supabase
 from model.category_model import (
     CategoryCreate,
     CategoryUpdate,
 )
+# Import the role checking gatekeeper
+from dependencies import require_admin
 
 router = APIRouter(
     prefix="/categories",
     tags=["Categories"]
 )
 
+# =========================
+# Create Category (SECURED)
+# =========================
 @router.post("/")
-def create_category(category: CategoryCreate):
+def create_category(category: CategoryCreate, admin_user: dict = Depends(require_admin)):
 
     result = (
         supabase
@@ -27,6 +32,9 @@ def create_category(category: CategoryCreate):
     }
 
 
+# =========================
+# Get Categories (PUBLIC)
+# =========================
 @router.get("/")
 def get_categories():
 
@@ -40,6 +48,9 @@ def get_categories():
     return result.data
 
 
+# =========================
+# Get Single Category (PUBLIC)
+# =========================
 @router.get("/{category_id}")
 def get_category(category_id: str):
 
@@ -60,10 +71,14 @@ def get_category(category_id: str):
     return result.data[0]
 
 
+# =========================
+# Update Category (SECURED)
+# =========================
 @router.put("/{category_id}")
 def update_category(
     category_id: str,
-    category: CategoryUpdate
+    category: CategoryUpdate,
+    admin_user: dict = Depends(require_admin)
 ):
 
     update_data = {
@@ -86,8 +101,11 @@ def update_category(
     }
 
 
+# =========================
+# Delete Category (SECURED)
+# =========================
 @router.delete("/{category_id}")
-def delete_category(category_id: str):
+def delete_category(category_id: str, admin_user: dict = Depends(require_admin)):
 
     result = (
         supabase
@@ -102,6 +120,9 @@ def delete_category(category_id: str):
     }
 
 
+# =========================
+# Active Categories List (PUBLIC)
+# =========================
 @router.get("/active/list")
 def active_categories():
 

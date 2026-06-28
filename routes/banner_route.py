@@ -1,12 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from supabaseclient import supabase
 from model.bannermodel import BannerCreate, BannerUpdate
+# Import the security gatekeeper
+from dependencies import require_admin
 
 router = APIRouter(prefix="/banners", tags=["Banners"])
 
 
+# =========================
+# Create Banner (SECURED)
+# =========================
 @router.post("/")
-def create_banner(banner: BannerCreate):
+def create_banner(banner: BannerCreate, admin_user: dict = Depends(require_admin)):
 
     result = (
         supabase.table("banners")
@@ -19,12 +24,21 @@ def create_banner(banner: BannerCreate):
         "data": result.data
     }
 
+
+# =========================
+# Get All Banners (PUBLIC)
+# =========================
 @router.get("/")
-def banner():
-    res=supabase.table("banners").select("*").execute()
+def get_all_banners():
+    res = supabase.table("banners").select("*").execute()
     return res.data
 
 
+# =========================
+# Get Single Banner (PUBLIC - Fixed unreachable code block)
+# =========================
+@router.get("/{banner_id}")
+def get_banner_by_id(banner_id: str):
     result = (
         supabase.table("banners")
         .select("*")
@@ -40,15 +54,20 @@ def banner():
 
     return result.data[0]
 
+
+# =========================
+# Update Banner (SECURED)
+# =========================
 @router.put("/{banner_id}")
 def update_banner(
     banner_id: str,
-    banner: BannerUpdate
+    banner: BannerUpdate,
+    admin_user: dict = Depends(require_admin)
 ):
 
     update_data = {
         k: v
-        for k, v in banner.dict().items()
+        for k, v in banner.model_dump().items()  # Using standard .model_dump() instead of deprecated .dict()
         if v is not None
     }
 
@@ -64,8 +83,12 @@ def update_banner(
         "data": result.data
     }
 
+
+# =========================
+# Delete Banner (SECURED)
+# =========================
 @router.delete("/{banner_id}")
-def delete_banner(banner_id: str):
+def delete_banner(banner_id: str, admin_user: dict = Depends(require_admin)):
 
     result = (
         supabase.table("banners")
@@ -77,4 +100,4 @@ def delete_banner(banner_id: str):
     return {
         "message": "Banner deleted successfully",
         "data": result.data
-    }    
+    }

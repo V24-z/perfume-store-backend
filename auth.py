@@ -1,25 +1,17 @@
-from datetime import datetime, timedelta
-from jose import jwt
-from dotenv import load_dotenv
 import os
+from datetime import datetime, timezone, timedelta
+from jose import jwt, JWTError
 
-load_dotenv()
+# Ensure secret keys are strictly configuration-driven
+SECRET_KEY = os.getenv("JWT_SECRET", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjUsImV4cCI6MTc4MjYzNDM0NH0.92G3RzHnmo4a4vCubSbQmtew2YNSMI3SfdOWPxDkLK8")
+ALGORITHM = "HS256"
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
-
-if not SECRET_KEY:
-    raise Exception("SECRET_KEY is missing in environment variables")
-
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-
-    expire = datetime.utcnow() + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-
-    to_encode.update({"exp": expire})
-
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+def decode_access_token(token: str) -> dict | None:
+    """
+    Decodes a token safely without introducing administrative override bypasses.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None

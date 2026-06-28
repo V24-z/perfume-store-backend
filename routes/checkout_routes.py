@@ -1,14 +1,26 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from supabaseclient import supabase
 from model.checkout_model import CheckoutRequest, UpdateOrderStatus
 import requests
+# Import dependencies for security guards
+from dependencies import get_current_user, require_admin
 
 N8N_WEBHOOK_URL = "https://task-ocr.app.n8n.cloud/webhook/generate-invoice"
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
+# ==========================================
+# ─── Create Order / Checkout (USER PROTECTED) ───
+# ==========================================
 @router.post("/checkout")
-def checkout(data: CheckoutRequest):
+def checkout(data: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+
+    # Security Check: Ensure the logged-in user is only checking out their own cart
+    if current_user["id"] != data.user_id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Forbidden. You cannot process checkouts for another user."
+        )
 
     # ─── 1. GET CART ITEMS ───
     cart_response = (
@@ -103,9 +115,11 @@ def checkout(data: CheckoutRequest):
     }
 
 
-# === get all orders ===
+# ==========================================
+# ─── Get All Global Orders (ADMIN ONLY) ───
+# ==========================================
 @router.get("/all")
-def get_all_orders():
+def get_all_orders(admin_user: dict = Depends(require_admin)):
     response = (
         supabase.table("orders")
         .select("*, users(*)")
@@ -114,9 +128,19 @@ def get_all_orders():
     )
     return response.data
 
-# Get all orders of logged in user
+
+# ==========================================
+# ─── Get Personal Orders (USER PROTECTED) ───
+# ==========================================
 @router.get("/user/{user_id}")
-def get_user_orders(user_id: int):
+def get_user_orders(user_id: int, current_user: dict = Depends(get_current_user)):
+
+    # Security Check: Standard users shouldn't read order histories belonging to someone else
+    if current_user["id"] != user_id and current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Forbidden. Access to this order history is restricted."
+        )
 
     response = (
         supabase.table("orders")
@@ -135,9 +159,12 @@ def get_user_orders(user_id: int):
 
     return response.data
 
-# === DEBUG: call this to diagnose empty customer details ===
+
+# ==========================================
+# ─── Debug Pipeline (ADMIN ONLY) ───
+# ==========================================
 @router.get("/debug/{order_id}")
-def debug_order(order_id: int):
+def debug_order(order_id: int, admin_user: dict = Depends(require_admin)):
 
     order_raw = (
         supabase.table("orders")
@@ -174,9 +201,11 @@ def debug_order(order_id: int):
     }
 
 
-# === order by order id ===
+# ==========================================
+# ─── Get Single Order (USER/ADMIN SECURED) ───
+# ==========================================
 @router.get("/{order_id}")
-def get_order(order_id: int):
+def get_order(order_id: int, current_user: dict = Depends(get_current_user)):
     order = (
         supabase.table("orders")
         .select("""
@@ -191,14 +220,27 @@ def get_order(order_id: int):
         .single()
         .execute()
     )
+    
+    if not order.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    # Security Check: Ensure standard users can only look up their personal orders
+    if order.data["user_id"] != current_user["id"] and current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Access Denied. You do not own this order record."
+        )
+        
     return order.data
 
 
-# === order status update ===
+# ==========================================
+# ─── Update Order Status (ADMIN ONLY) ───
+# ==========================================
 @router.put("/{order_id}")
-def update_order_status(order_id: int, data: UpdateOrderStatus):
+def update_order_status(order_id: int, data: UpdateOrderStatus, admin_user: dict = Depends(require_admin)):
 
-    # 1. Get current order (already has phone_number + shipping_address)
+    # 1. Get current order
     existing = (
         supabase.table("orders")
         .select("*")
@@ -265,8 +307,8 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
                 "order_id":         str(order_id),
                 "customer_name":    user.get("name", ""),
                 "email":            user.get("email", ""),
-                "phone_number":     order_data.get("phone_number", ""),      # ✅ from orders table
-                "shipping_address": order_data.get("shipping_address", ""),  # ✅ from orders table
+                "phone_number":     order_data.get("phone_number", ""),      
+                "shipping_address": order_data.get("shipping_address", ""),  
                 "order_date":       order_data.get("created_at", "")[:10],
                 "payment_method":   order_data.get("payment_method", "COD").upper(),
                 "payment_status":   order_data.get("payment_status", ""),
@@ -294,5 +336,3 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
         "message": "status updated",
         "order": updated_order
     }
-
-
