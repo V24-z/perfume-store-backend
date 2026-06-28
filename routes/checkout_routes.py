@@ -114,6 +114,26 @@ def get_all_orders():
     )
     return response.data
 
+# Get all orders of logged in user
+@router.get("/user/{user_id}")
+def get_user_orders(user_id: int):
+
+    response = (
+        supabase.table("orders")
+        .select("""
+            *,
+            users(*),
+            order_items(
+                *,
+                products(*)
+            )
+        """)
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return response.data
 
 # === DEBUG: call this to diagnose empty customer details ===
 @router.get("/debug/{order_id}")
@@ -274,3 +294,5 @@ def update_order_status(order_id: int, data: UpdateOrderStatus):
         "message": "status updated",
         "order": updated_order
     }
+
+
