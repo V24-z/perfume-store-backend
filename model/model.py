@@ -9,3 +9,13 @@ class User(BaseModel):
 class Loginuser(BaseModel):
     email: EmailStr
     password:str    
+    
+from pydantic import BaseModel
+
+class AdminCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    phon: str
+    
+    

@@ -1,4 +1,4 @@
-from model.model import User,Loginuser
+from model.model import User,Loginuser,AdminCreate
 from fastapi import APIRouter,HTTPException,BackgroundTasks, Depends
 from supabaseclient import supabase
 from auth import create_access_token
@@ -8,6 +8,10 @@ import bcrypt
 import requests
 
 router=APIRouter()
+#______________________   
+#=======n8n webhook trigger function=========
+#______________________   
+
 def trigger_welcome_email(name: str, email: str):
     print("Triggering n8n webhook for:", name, email)
     response=requests.post(
@@ -17,6 +21,9 @@ def trigger_welcome_email(name: str, email: str):
     )
     print("Status Code:", response.status_code)
     print("Response:", response.text)
+#______________________       
+#=========SIGNUP==============
+#______________________   
 
 @router.post("/signin")
 def signin(user:User , background_tasks: BackgroundTasks):
@@ -45,6 +52,9 @@ def signin(user:User , background_tasks: BackgroundTasks):
         "message": "Sign up successfully",
         "data": res.data
     }
+#______________________     
+#========LOGIN=========
+#______________________   
 
 @router.post("/login")
 def login(user:Loginuser):
@@ -87,6 +97,13 @@ def mask_email(email):
     name, domain = email.split("@")
     return name[:2] + "***@" + domain
 
+
+
+
+#______________________   
+#=========GET ALL USERS=========
+#______________________   
+
 @router.get("/users")
 def get_users(current_user=Depends(admin_required)):
 
@@ -108,5 +125,50 @@ def get_users(current_user=Depends(admin_required)):
         "message": "Users fetched successfully",
         "data": users
     }
+
+#______________________   
+#======ADMIN CREATE USER=========
+#______________________   
+
+
+@router.post("/create-admin")
+def create_admin(admin_data: AdminCreate, current_user=Depends(admin_required)):
+    # Check if email already exists
+    response = (
+        supabase.table("users")
+        .select("*")
+        .eq("email", admin_data.email)
+        .execute()
+    )
+
+    if response.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
+
+    hashed_password = bcrypt.hashpw(
+        admin_data.password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+    result = (
+        supabase.table("users")
+        .insert({
+            "name": admin_data.name,
+            "email": admin_data.email,
+            "phon": admin_data.phon,
+            "password": hashed_password,
+            "role": "admin"
+        })
+        .execute()
+    )
+
+    return {
+        "message": "Admin created successfully",
+        "data": result.data
+    }
+
+
 
     
